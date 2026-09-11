@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ein einfacher Konzeptprototyp, der die Beteiligung an lokalen Elektrizitätsgemeinschaften sichtbar macht.">
+  <meta name="theme-color" content="#234f34">
+  <title>Hier wächst etwas</title>
+  <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
+  <style>
+    :root {
+      --forest: #234f34; --forest-dark: #173923; --leaf: #4f824d;
+      --cream: #f7f3e8; --paper: #fffdf7; --sky: #dceaf0;
+      --ink: #183526; --muted: #5d7165; --line: rgba(35,79,52,.16);
+      --shadow: 0 16px 42px rgba(27,67,42,.12);
+      --light-shadow: 0 2px 8px rgba(27,67,42,.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; color: var(--ink); background: var(--cream);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px; line-height: 1.55;
+    }
+    button, a { font: inherit; } button { color: inherit; } a { color: inherit; }
+    :focus-visible { outline: 3px solid #d8b933; outline-offset: 3px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    .script {
+      font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+      font-weight: 700; letter-spacing: -.045em;
+    }
+
+    /* TOPBAR */
+    .topbar {
+      height: 72px; display: flex; align-items: center; justify-content: space-between;
+      gap: 24px; padding: 0 clamp(18px,5vw,72px);
+      background: rgba(255,253,247,.96); border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 11px;
+      text-decoration: none; font-size: 1.22rem; white-space: nowrap;
+    }
+    .brand-mark {
+      width: 34px; height: 34px; display: grid; place-items: center;
+      color: white; background: var(--forest); border-radius: 50%;
+    }
+    .brand-mark svg { width: 21px; height: 21px; }
+    .topbar nav { display: flex; align-items: center; gap: 20px; }
+    .topbar nav a { padding: 8px 0; text-decoration: none; font-weight: 720; font-size: .95rem; }
+    .topbar nav a:hover { text-decoration: underline; text-underline-offset: 5px; }
+
+    /* ALLGEMEINE SECTION-STRUKTUR (AN SUPPORT-DESIGN ANGEPASST) */
+    .section {
+      padding: clamp(32px, 4vw, 48px) clamp(18px, 5vw, 72px);
+      background: linear-gradient(145deg,#eef5f2,#f8f5e9);
+      scroll-margin-top: 18px;
+      border-bottom: 1px solid var(--line);
+      --section-max-width: 1300px;
+    }
+    .section-inner { max-width: var(--section-max-width); margin: 0 auto; }
+    .section-head { max-width: var(--section-max-width); margin-bottom: 32px; }
+    .kicker {
+      margin-top: 0; margin-bottom: 9px; color: var(--forest); font-size: .82rem; font-weight: 850;
+      letter-spacing: .12em; text-transform: uppercase;
+    }
+    .section-head h1 {
+      margin: 0 0 14px; font-size: clamp(2.3rem,5vw,4.4rem);
+      line-height: 1.1; text-wrap: balance;
+    }
+    .section-head h2 {
+      margin: 0 0 14px; font-size: clamp(2.3rem,5vw,4.4rem);
+      line-height: 1.05; text-wrap: balance;
+    }
+    .section-head > p:last-child { margin: 0; color: var(--muted); font-size: 1.08rem; }
+
+    /* KARTEN-STYLING (EINHEITLICH WIE SUPPORT-CARD) */
+    .section-card {
+      padding: clamp(24px,4vw,42px);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    /* KARTENANSICHT (HERO) */
+    .map-shell {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .map-toolbar {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 20px; padding: 15px 18px; border-bottom: 1px solid var(--line);
+      position: relative; z-index: 1100;
+    }
+    .search-wrap { position: relative; width: min(430px,48vw); }
+    .place-search {
+      display: grid; grid-template-columns: minmax(0,1fr) auto; min-width: 0;
+      overflow: hidden; background: white; border: 1px solid rgba(35,79,52,.28);
+      border-radius: 999px;
+    }
+    .place-search:focus-within { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(35,79,52,.12); }
+    .place-search input {
+      width: 100%; min-width: 0; padding: 11px 7px 11px 17px;
+      color: var(--ink); background: transparent; border: 0; outline: 0;
+    }
+    .place-search button {
+      width: 44px; border: 0; color: white; background: var(--forest); cursor: pointer;
+    }
+    .place-search button:hover { background: var(--forest-dark); }
+    .place-search svg { width: 19px; height: 19px; vertical-align: middle; }
+    .search-results {
+      position: absolute; top: calc(100% + 8px); right: 0; width: 100%; max-height: 260px;
+      overflow-y: auto; padding: 6px; background: white; border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow);
+    }
+    .search-results[hidden] { display: none; }
+    .search-result {
+      display: block; width: 100%; padding: 10px 12px; border: 0;
+      border-radius: 11px; text-align: left; background: transparent; cursor: pointer;
+    }
+    .search-result:hover, .search-result:focus-visible { background: #edf1e9; }
+    .search-message { margin: 0; padding: 10px 12px; color: var(--muted); font-size: .88rem; }
+    .map-content {
+      display: grid; grid-template-columns: minmax(0,1fr) 320px;
+      height: clamp(430px,calc(100vh - 200px),560px); min-height: 430px;
+    }
+    .map-area {
+      position: relative; min-width: 0; min-height: 0; overflow: hidden;
+      background: #dfe9dc;
+    }
+    #map { position: absolute; inset: 0; z-index: 1; }
+    .maplibregl-map { font: inherit; background: #cce6bb; }
+    .maplibregl-ctrl-group { overflow: hidden; border: 2px solid rgba(35,79,52,.18); border-radius: 13px; box-shadow: 0 7px 18px rgba(24,53,38,.18); }
+    .maplibregl-ctrl-group button { width: 36px; height: 36px; background-color: #fffdf7; }
+    .maplibregl-ctrl-attrib { font-size: 10px; }
+    .participation-badge {
+      position: absolute; display: grid; gap: 4px; min-width: 92px; padding: 8px 10px;
+      color: var(--ink); background: rgba(255,253,247,.97); border: 2px solid rgba(35,79,52,.22);
+      border-radius: 15px; box-shadow: 0 7px 0 rgba(35,79,52,.18),0 11px 22px rgba(24,53,38,.2);
+      text-align: left; cursor: pointer; transform-origin: bottom center;
+    }
+    .participation-badge::after {
+      content: ""; position: absolute; left: 50%; bottom: -9px; width: 13px; height: 13px;
+      background: #fffdf7; border-right: 2px solid rgba(35,79,52,.22); border-bottom: 2px solid rgba(35,79,52,.22);
+      transform: translateX(-50%) rotate(45deg); border-radius: 0 0 3px 0;
+    }
+    .participation-badge:hover, .participation-badge:focus-visible { transform: translateY(-3px); z-index: 2; }
+    .badge-name { max-width: 116px; overflow: hidden; text-overflow: ellipsis; font-size: .78rem; font-weight: 850; white-space: nowrap; }
+    .tree-row { display: flex; align-items: center; gap: 2px; }
+    .tree-icon { width: 15px; height: 17px; color: var(--leaf); filter: drop-shadow(0 1px 0 rgba(23,57,35,.15)); }
+    .tree-icon.off { opacity: .23; filter: grayscale(1); }
+    .tree-count { margin-left: 4px; color: var(--muted); font-size: .68rem; font-weight: 850; white-space: nowrap; }
+    .map-tree {
+      position: relative; width: 34px; height: 52px; pointer-events: none;
+      filter: drop-shadow(0 8px 5px rgba(24,53,38,.28));
+    }
+    .map-tree svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .map-back, .dimension-toggle {
+      position: absolute; z-index: 5; min-height: 42px; padding: 9px 14px;
+      color: var(--forest-dark); background: rgba(255,253,247,.96);
+      border: 1px solid rgba(35,79,52,.2); border-radius: 13px;
+      box-shadow: 0 8px 22px rgba(24,53,38,.18); font-weight: 850; cursor: pointer;
+    }
+    .map-back { top: 14px; left: 14px; max-width: calc(100% - 90px); }
+    .dimension-toggle { top: 14px; right: 14px; min-width: 48px; }
+    .map-back:hover, .dimension-toggle:hover { background: white; transform: translateY(-1px); }
+    .map-back[hidden] { display: none; }
+    .search-marker {
+      padding: 9px 13px; color: white; background: #185b78; border: 2px solid white;
+      border-radius: 999px; box-shadow: 0 7px 0 rgba(17,63,84,.24),0 12px 22px rgba(24,53,38,.2);
+      font-size: .8rem; font-weight: 850; white-space: nowrap; cursor: pointer;
+    }
+    .map-status {
+      position: absolute; left: 50%; top: 50%; z-index: 3; width: min(340px,calc(100% - 40px));
+      padding: 13px 16px; color: var(--forest-dark); background: rgba(255,253,247,.96);
+      border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+      text-align: center; transform: translate(-50%,-50%);
+    }
+    .map-status[hidden] { display: none; }
+    .summary {
+      padding: 27px; display: flex; flex-direction: column; justify-content: center;
+      background: linear-gradient(180deg,#fffdf7,#edf3e5); border-left: 1px solid var(--line);
+    }
+    .summary-label {
+      color: var(--muted); font-size: .78rem; font-weight: 850;
+      letter-spacing: .1em; text-transform: uppercase;
+    }
+    .summary h2 { margin: 6px 0 2px; font-size: 2rem; line-height: 1.1; }
+    .summary-value { margin: 15px 0 0; color: var(--forest); font-size: 3.8rem; line-height: 1; font-weight: 900; }
+    .summary-text { margin: 10px 0 0; color: var(--muted); }
+    .progress {
+      height: 10px; margin: 21px 0 8px; overflow: hidden;
+      background: #dfe4da; border-radius: 99px;
+    }
+    .progress span {
+      display: block; height: 100%; width: 41%;
+      background: linear-gradient(90deg,#8db06f,var(--forest));
+      border-radius: inherit; transition: width .25s ease;
+    }
+    .summary-value[hidden], .progress[hidden] { display: none; }
+    .info-button {
+      width: 100%; min-height: 46px; margin-top: 20px; padding: 10px 14px;
+      color: white; background: var(--forest); border: 0; border-radius: 14px;
+      font-weight: 820; line-height: 1.3; cursor: pointer;
+    }
+    .info-button:hover { background: var(--forest-dark); }
+    .info-button[hidden] { display: none; }
+    .legend {
+      display: flex; align-items: center; gap: 8px; margin-top: 24px;
+      padding-top: 20px; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: .82rem;
+    }
+    .legend-leaf {
+      width: 25px; height: 25px; display: grid; place-items: center;
+      flex: none; color: white; background: var(--leaf); border-radius: 50%;
+    }
+
+    /* SO FUNKTIONIERT'S (STEPS) */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .step {
+      padding: 24px; background: rgba(255,253,247,.8);
+      border: 1px solid var(--line); border-radius: 20px;
+    }
+    .step-number {
+      width: 42px; height: 42px; display: grid; place-items: center;
+      margin-bottom: 20px; color: white; background: var(--forest);
+      border-radius: 14px; font-weight: 900;
+    }
+    .step h3 { margin: 0 0 8px; font-size: 1.25rem; }
+    .step p { margin: 0; color: var(--muted); }
+
+    /* VORTEILE (BENEFITS) */
+    .benefits-layout {
+      display: grid; grid-template-columns: minmax(230px, 1fr) minmax(320px, 1.2fr) minmax(250px, 1fr);
+      gap: clamp(22px, 3vw, 36px); align-items: center;
+    }
+    .benefit-list { display: grid; gap: 18px; }
+    .benefit-item { display: grid; grid-template-columns: 54px 1fr; gap: 15px; align-items: start; }
+    .benefit-icon, .potential-icon {
+      width: 54px; height: 54px; display: grid; place-items: center;
+      color: var(--forest); background: rgba(35,79,52,.08); border-radius: 50%;
+    }
+    .benefit-icon svg, .potential-icon svg { width: 27px; height: 27px; }
+    .benefit-item h3 { margin: 1px 0 4px; font-size: 1.05rem; }
+    .benefit-item p { margin: 0; color: #53685c; font-size: .94rem; line-height: 1.48; }
+
+    .house-visual {
+      position: relative; min-width: 0; margin: 0; align-self: stretch;
+      display: grid; place-items: center; background: transparent;
+    }
+    .house-visual img {
+      position: relative; z-index: 1; display: block; width: auto; max-width: 100%; height: auto;
+      max-height: 610px; object-fit: contain;
+      filter: drop-shadow(0 24px 24px rgba(40,75,48,.18));
+    }
+
+    .potential-card {
+      padding: clamp(20px, 2.5vw, 28px); background: rgba(255, 253, 247, 0.9);
+      border: 1px solid rgba(35,79,52,.12); border-radius: 24px; box-shadow: var(--shadow);
+    }
+    .potential-card h3 { margin: 0 0 3px; font-size: clamp(1.35rem,2vw,1.75rem); line-height: 1.15; }
+    .potential-subtitle { margin: 0 0 18px; color: var(--muted); font-size: .9rem; }
+    .potential-list { display: grid; gap: 12px; }
+    .potential-item {
+      display: grid; grid-template-columns: 46px 1fr; gap: 13px; align-items: center;
+      padding: 13px; background: #eef1e1; border-radius: 17px; box-shadow: var(--light-shadow);
+    }
+    .potential-icon { width: 46px; height: 46px; background: transparent; display: block; transform: translateY(9px);}
+    .potential-icon svg { width: 25px; height: 25px; display: block;}
+    .potential-item strong { display: block; color: var(--forest); line-height: 1.24;}
+    .potential-item span { display: block; margin-top: 3px; color: var(--muted); font-size: .83rem; line-height: 1.35; }
+
+    /* TESTIMONIALS (IN VORTEILE INTEGRIRT) */
+    .testimonials {
+      display: flex; gap: 20px; width: 100%; margin-top: 28px;
+    }
+    .testimonial {
+      flex: 1 1 50%; min-width: 0; padding: clamp(24px, 3vw, 32px);
+      background: rgba(255, 253, 247, 0.93); border: 1px solid rgba(35, 79, 52, 0.12);
+      border-radius: 24px; box-sizing: border-box; display: flex; flex-direction: column;
+      justify-content: space-between;
+    }
+    .testimonial blockquote {
+      margin: 0 0 16px; padding-left: 18px; color: var(--forest-dark);
+      border-left: 4px solid #7eab62; font-family: "Segoe Print", "Bradley Hand", cursive;
+      font-size: clamp(1.15rem, 1.8vw, 1.5rem); font-weight: 700; line-height: 1.35;
+    }
+    .testimonial cite { color: var(--muted); font-size: 0.87rem; font-style: normal; font-weight: 750; }
+
+    /* ANSPRECHPERSON (SUPPORT) */
+    .support-card {
+      display: grid; grid-template-columns: auto minmax(0,1fr) minmax(380px,.9fr);
+      gap: clamp(22px,3vw,38px); align-items: center; min-width: 0;
+    }
+    .contact-icon {
+      width: 58px; height: 58px; display: grid; place-items: center;
+      color: white; background: var(--leaf); border-radius: 18px; box-shadow: 0 6px 0 rgba(35,79,52,.16);
+    }
+    .contact-icon svg { width: 25px; height: 25px; }
+    .concept-badge {
+      display: inline-flex; padding: 6px 10px; color: var(--forest-dark); background: #e3edd6;
+      border-radius: 999px; font-size: .75rem; font-weight: 850; letter-spacing: .03em;
+    }
+    .contact-copy h3 { margin: 11px 0 0; font-size: clamp(1.45rem,2.5vw,2rem); line-height: 1.1; }
+    .contact-actions { min-width: 0; }
+    .contact-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 16px; }
+    .contact-field { padding: 14px; background: #f1f2e9; border-radius: 15px; }
+    .contact-field dt { color: var(--muted); font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+    .contact-field dd { margin: 4px 0 0; font-weight: 780; overflow-wrap: anywhere; }
+    .contact-button {
+      width: 100%; min-height: 48px; padding: 11px 17px; color: white; background: var(--forest);
+      border: 0; border-radius: 14px; font-weight: 820; cursor: pointer;
+    }
+    .contact-button:hover { background: var(--forest-dark); }
+    .contact-reveal { margin: 17px 0 0; padding: 14px; color: var(--muted); background: #eef4e7; border-radius: 14px; }
+    .contact-reveal[hidden] { display: none; }
+    .note { max-width: 1220px; margin: 28px auto 0; color: var(--muted); font-size: .87rem; }
+
+    /* FOOTER */
+    footer { padding: 28px clamp(18px,5vw,72px); color: #dce8de; background: var(--forest-dark); }
+    .footer-inner {
+      max-width: 1220px; margin: 0 auto; display: flex;
+      align-items: center; justify-content: space-between; gap: 24px;
+    }
+    footer p { margin: 0; font-size: .86rem; }
+
+    /* RESPONSIVE DESIGN */
+    @media (max-width: 980px) {
+      .map-content { grid-template-columns: 1fr; height: auto; }
+      .summary { border-left: 0; border-top: 1px solid var(--line); }
+      .map-area { min-height: 480px; }
+      .benefits-layout { grid-template-columns: 1fr 1fr; }
+      .house-visual { grid-column: 1 / -1; grid-row: 2; }
+      .house-visual img { max-height: 480px; }
+      .support-card { grid-template-columns: auto 1fr; }
+      .contact-actions { grid-column: 1 / -1; }
+    }
+    @media (max-width: 768px) {
+      .topbar nav .nav-secondary { display: none; }
+      .steps { grid-template-columns: 1fr; }
+      .testimonials { flex-direction: column; }
+    }
+    @media (max-width: 640px) {
+      .topbar { height: 66px; padding: 0 15px; }
+      .brand { font-size: 1.05rem; }
+      .topbar nav { gap: 13px; }
+      .topbar nav a { font-size: .78rem; }
+      .map-toolbar { align-items: stretch; }
+      .search-wrap { width: 100%; }
+      .map-area { min-height: 400px; }
+      .benefits-layout { grid-template-columns: 1fr; }
+      .house-visual { grid-column: auto; grid-row: auto; }
+      .house-visual img { max-height: 380px; }
+      .support-card { grid-template-columns: 1fr; }
+      .contact-actions { grid-column: auto; }
+      .contact-fields { grid-template-columns: 1fr; }
+      .footer-inner { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="topbar">
+    <a class="brand script" href="#uebersicht" aria-label="Zur Übersicht">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 20V10m0 3C8 13 5 10 5 5c5 0 8 3 7 8Zm0-2c1-4 4-6 8-6 0 4-3 7-8 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      Hier wächst etwas
+    </a>
+    <nav aria-label="Hauptnavigation">
+      <a class="nav-link nav-secondary" href="#uebersicht">Übersicht</a>
+      <a class="nav-link nav-secondary" href="#so-funktionierts">So funktioniert’s</a>
+      <a class="nav-link" href="#vorteile">Vorteile</a>
+      <a class="nav-link" href="#ansprechperson">Ansprechperson</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- SEKTION 1: ÜBERSICHT / KARTE -->
+    <section class="section" id="uebersicht">
+      <div class="section-inner">
+        <div class="section-head">
+          <p class="kicker">Lokale Energie im Überblick</p>
+          <h1 class="script">Hier wächst etwas.</h1>
+          <p>Ein einfacher Konzeptprototyp, der die Beteiligung an lokalen Elektrizitätsgemeinschaften sichtbar macht.</p>
+        </div>
+
+        <div class="map-shell">
+          <div class="map-toolbar">
+            <div class="search-wrap">
+              <form class="place-search" id="placeSearch" role="search">
+                <label class="sr-only" for="placeSearchInput">Ort oder Adresse suchen</label>
+                <input id="placeSearchInput" type="search" autocomplete="off" placeholder="Ort, Gemeinde, Stadt oder Adresse …">
+                <button type="submit" aria-label="Suchen">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+              </form>
+              <div class="search-results" id="searchResults" hidden aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div class="map-content">
+            <div class="map-area">
+              <div id="map" aria-label="Interaktive Karte mit anklickbaren Beteiligungswerten"></div>
+              <button class="map-back" id="mapBack" type="button" hidden>← Zurück</button>
+              <button class="dimension-toggle" id="dimensionToggle" type="button" aria-pressed="true" aria-label="Zur zweidimensionalen Kartenansicht wechseln">2D</button>
+              <p class="map-status" id="mapStatus">3D-Karte wird geladen …</p>
+            </div>
+            <aside class="summary" aria-live="polite">
+              <span class="summary-label" id="summaryLabel">Übersicht · Beispieldaten</span>
+              <h2 id="summaryTitle">Schweiz</h2>
+              <div class="summary-value" id="summaryValue"><span id="summaryPercent">41</span> %</div>
+              <p class="summary-text" id="summaryText">Beispielhafter Anteil teilnehmender Haushalte.</p>
+              <div class="progress" id="progress" aria-hidden="true"><span id="progressBar"></span></div>
+              <small id="milestoneText">Nächster Meilenstein: 50 %</small>
+              <button class="info-button" id="infoButton" type="button" hidden>Mehr erfahren</button>
+              <div class="legend">
+                <span class="legend-leaf" aria-hidden="true">♣</span>
+                Mehr gefüllte Baumsymbole bedeuten einen höheren Beteiligungsanteil.
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKTION 2: SO FUNKTIONIERT'S -->
+    <section class="section" id="so-funktionierts">
+      <div class="section-inner">
+        <div class="section-head">
+          <p class="kicker">So funktioniert’s</p>
+          <h2 class="script">Strom aus der Nachbarschaft. Gemeinsam nutzen.</h2>
+          <p>Eine lokale Elektrizitätsgemeinschaft verbindet Menschen, die lokal erzeugten Strom anbieten und beziehen.</p>
+        </div>
+        
+        <div class="steps">
+          <article class="step">
+            <div class="step-number">1</div>
+            <h3>Strom lokal erzeugen</h3>
+            <p>Solaranlagen produzieren Strom direkt in Ihrer Umgebung.</p>
+          </article>
+          <article class="step">
+            <div class="step-number">2</div>
+            <h3>Gemeinsam nutzen</h3>
+            <p>Überschüssiger Solarstrom wird innerhalb der Gemeinschaft angeboten.</p>
+          </article>
+          <article class="step">
+            <div class="step-number">3</div>
+            <h3>Beteiligung sehen</h3>
+            <p>Die Baumdarstellung macht den Anteil teilnehmender Haushalte sichtbar.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKTION 3: VORTEILE & TESTIMONIALS -->
+    <section class="section" id="vorteile" aria-labelledby="benefitsTitle">
+      <div class="section-inner">
+        <div class="section-head">
+          <p class="kicker">Was bedeutet das für mich?</p>
+          <h2 class="script" id="benefitsTitle">Mein Zuhause. Mehr als nur Strom.</h2>
+          <p>Mit deiner Teilnahme an der LEG nutzt du lokalen Solarstrom aus deiner Nachbarschaft – einfach, unkompliziert und zu attraktiven Konditionen.</p>
+        </div>
+
+        <div class="section-card">
+          <div class="benefits-layout">
+            <div class="benefit-list">
+              <article class="benefit-item">
+                <span class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M5 11c0-3.2 2.7-5.5 6.5-5.5h2c3.5 0 6 2 6 5v4.2a3 3 0 0 1-3 3H8.8A3.8 3.8 0 0 1 5 13.9V11Z" fill="currentColor"/><path d="M8 17.5V20m8-2.5V20M5.3 10H3.5m6-4.3L8.3 3.5m5.2 2V3.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16.3" cy="9.8" r="1" fill="#f7f3e8"/></svg>
+                </span>
+                <div><h3>Günstiger Strom</h3><p>Du profitierst von einem attraktiven Preis für lokalen Solarstrom.</p></div>
+              </article>
+              <article class="benefit-item">
+                <span class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M20 4C11.5 4.4 6 8.2 6 14.4c0 2.8 2 4.6 4.8 4.6C17 19 20 12.1 20 4Z" fill="currentColor"/><path d="M5 21c1.2-5.4 5-9.3 10.8-12.2" stroke="#f7f3e8" stroke-width="2" stroke-linecap="round"/></svg>
+                </span>
+                <div><h3>Mehr Nachhaltigkeit</h3><p>Du unterstützt aktiv die Energiewende in deiner Gemeinde.</p></div>
+              </article>
+              <article class="benefit-item">
+                <span class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="3"/><circle cx="5.5" cy="10" r="2.5"/><circle cx="18.5" cy="10" r="2.5"/><path d="M6.5 19v-1.5A4.5 4.5 0 0 1 11 13h2a4.5 4.5 0 0 1 4.5 4.5V19H6.5ZM2 19v-1a4 4 0 0 1 4-4h.4a6.5 6.5 0 0 0-1.9 4.6V19H2Zm20 0h-2.5v-.4a6.5 6.5 0 0 0-1.9-4.6h.4a4 4 0 0 1 4 4v1Z"/></svg>
+                </span>
+                <div><h3>Starke Nachbarschaft</h3><p>Gemeinsam mit anderen Haushalten machst du einen echten Unterschied.</p></div>
+              </article>
+              <article class="benefit-item">
+                <span class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2.5" fill="currentColor"/><path d="M9 8h6M9 12h6M9 16h4" stroke="#f7f3e8" stroke-width="2" stroke-linecap="round"/></svg>
+                </span>
+                <div><h3>Einfach und ohne Aufwand</h3><p>Die Abrechnung und Verteilung erfolgen automatisch über das bestehende Stromnetz.</p></div>
+              </article>
+            </div>
+
+            <figure class="house-visual">
+              <img src="assets/solarhaus-3d.png" alt="3D-Illustration eines Einfamilienhauses mit Solarpanels, Garten, Bäumen und Sträuchern">
+            </figure>
+
+            <aside class="potential-card" aria-label="Beispiel für mögliches Potenzial">
+              <h3>Dein mögliches Potenzial</h3>
+              <p class="potential-subtitle">Beispiel basierend auf deinem Haushalt</p>
+              <div class="potential-list">
+                <div class="potential-item">
+                  <span class="potential-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="6" ry="2.5" fill="currentColor"/><path d="M6 6v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6M6 10v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4M6 14v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4" stroke="currentColor" stroke-width="1.8"/></svg></span>
+                  <div><strong>Bis zu 15 % günstiger</strong><span>je nach Anteil lokalem Solarstrom</span></div>
+                </div>
+                <div class="potential-item">
+                  <span class="potential-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a5 5 0 0 0-4.8 3.6A4.5 4.5 0 0 0 7.5 15H11v6h2v-6h3.4a4.1 4.1 0 0 0 .8-8.1A5 5 0 0 0 12 3Z"/></svg></span>
+                  <div><strong>Aktiv CO₂ sparen</strong><span>mit erneuerbarer Energie</span></div>
+                </div>
+                <div class="potential-item">
+                  <span class="potential-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m3 11 9-8 9 8v9h-6v-6H9v6H3v-9Z"/><path d="m12 6 7 6v8h2V11l-9-8-9 8v9h2v-8l7-6Z"/></svg></span>
+                  <div><strong>Gemeinsam mit der Nachbarschaft</strong><span>für eine nachhaltige Zukunft</span></div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <div class="testimonials" aria-label="Beispielstimmen aus der Nachbarschaft">
+          <article class="testimonial">
+            <blockquote>„Es ist ein gutes Gefühl, den Strom gemeinsam mit meinen Nachbarn zu nutzen.“</blockquote>
+            <cite>— Familie Meier, Sonnenwinkel</cite>
+          </article>
+          <article class="testimonial">
+            <blockquote>„Die Idee wird greifbar, weil wir sehen, was direkt in unserem Quartier passiert.“</blockquote>
+            <cite>— Aylin und Marco, Wülflingen</cite>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKTION 4: ANSPRECHPERSON (SUPPORT) -->
+    <section class="section" id="ansprechperson" aria-labelledby="supportTitle">
+      <div class="section-inner">
+        <div class="section-head">
+          <p class="kicker">Lokale Unterstützung</p>
+          <h2 class="script" id="supportTitle">Eine echte Person für deine Fragen.</h2>
+          <p>Eine Ansprechperson vor Ort hilft dir, deine Situation einzuordnen und die nächsten Schritte zu klären.</p>
+        </div>
+        
+        <article class="section-card support-card">
+          <div class="contact-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M8.5 4.5 10 8 8 9.5c1.2 2.4 3.1 4.3 5.5 5.5l1.5-2 3.5 1.5v3c0 .8-.7 1.5-1.5 1.5C10.4 19 5 13.6 5 7c0-.8.7-1.5 1.5-1.5h2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="contact-copy">
+            <span class="concept-badge">Platzhalter im Konzeptprototyp</span>
+            <h3>Deine Ansprechperson vor Ort</h3>
+          </div>
+          <div class="contact-actions">
+            <dl class="contact-fields">
+              <div class="contact-field"><dt>Name</dt><dd>Wird noch festgelegt</dd></div>
+              <div class="contact-field"><dt>Telefonnummer</dt><dd>Wird noch ergänzt</dd></div>
+            </dl>
+            <button class="contact-button" id="contactToggle" type="button" aria-expanded="false" aria-controls="contactReveal">Kontaktmöglichkeiten anzeigen</button>
+            <p class="contact-reveal" id="contactReveal" hidden>Im nächsten Prototyp-Schritt können hier Telefon, E-Mail und persönliche Beratungszeiten der lokalen Ansprechperson hinterlegt werden.</p>
+          </div>
+        </article>
+        <p class="note">Konzeptprototyp mit erfundenen Beteiligungsdaten und Beispielstimmen. Fehlende Daten dürfen nicht als null Beteiligung dargestellt werden.</p>
+      </div>
+    </section>
+
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <span class="script">Hier wächst etwas</span>
+      <p>Beispieldaten · virtuelle Bäume · Stand 10.09.2026</p>
+    </div>
+  </footer>
+
+<script src="vendor/maplibre/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+  const data = {
+    schweiz: {
+      parent: null,
+      title: "Schweiz", percent: 41,
+      text: "Beispielhafter Anteil teilnehmender Haushalte.",
+      milestone: "Nächster Meilenstein: 50 %",
+      label: "Übersicht · Beispieldaten",
+      center: [46.82,8.23], zoom: 7,
+      places: [
+        {name:"Winterthur",percent:18,coords:[47.4988,8.7241]},
+        {name:"Chur",percent:34,coords:[46.8508,9.532]},
+        {name:"Bern",percent:27,coords:[46.948,7.4474]},
+        {name:"Basel",percent:46,coords:[47.5596,7.5886]},
+        {name:"Lausanne",percent:39,coords:[46.5197,6.6323]},
+        {name:"Lugano",percent:53,coords:[46.0037,8.9511]}
+      ]
+    },
+    winterthur: {
+      parent: "schweiz",
+      title: "Winterthur", percent: 18,
+      text: "90 von 500 Haushalten machen beispielhaft mit.",
+      milestone: "Noch 35 Haushalte bis zum Meilenstein von 25 %",
+      label: "Gemeinde · Beispieldaten",
+      center: [47.4988,8.7241], zoom: 12,
+      places: [
+        {name:"Sonnenwinkel",percent:25,coords:[47.5005,8.733]},
+        {name:"Oberwinterthur",percent:22,coords:[47.5165,8.7682]},
+        {name:"Veltheim",percent:16,coords:[47.507,8.717]},
+        {name:"Töss",percent:12,coords:[47.487,8.704]},
+        {name:"Wülflingen",percent:9,coords:[47.51,8.681]},
+        {name:"Seen",percent:31,coords:[47.487,8.767]}
+      ]
+    },
+    sonnenwinkel: {
+      parent: "winterthur",
+      title: "Sonnenwinkel", percent: 25,
+      text: "20 von 80 Haushalten im fiktiven Beispielquartier.",
+      milestone: "Meilenstein von 25 % erreicht",
+      label: "Fiktives Quartier · Beispieldaten",
+      center: [47.5005,8.733], zoom: 15,
+      places: [
+        {name:"Rosenweg 12",percent:20,coords:[47.5018,8.7298]},
+        {name:"Rosenweg 18",percent:0,coords:[47.503,8.7332]},
+        {name:"Kirchplatz 3",percent:60,coords:[47.4998,8.7357]},
+        {name:"Gartenweg 7",percent:100,coords:[47.4979,8.7318]},
+        {name:"Birkenweg 2",percent:15,coords:[47.5007,8.7385]},
+        {name:"Dorfplatz 8",percent:35,coords:[47.4969,8.7365]}
+      ]
+    }
+  };
+
+  const summaryTitle = document.getElementById("summaryTitle");
+  const summaryPercent = document.getElementById("summaryPercent");
+  const summaryText = document.getElementById("summaryText");
+  const summaryLabel = document.getElementById("summaryLabel");
+  const summaryValue = document.getElementById("summaryValue");
+  const milestoneText = document.getElementById("milestoneText");
+  const progress = document.getElementById("progress");
+  const progressBar = document.getElementById("progressBar");
+  const searchForm = document.getElementById("placeSearch");
+  const searchInput = document.getElementById("placeSearchInput");
+  const searchResults = document.getElementById("searchResults");
+  const mapStatus = document.getElementById("mapStatus");
+  const mapBack = document.getElementById("mapBack");
+  const dimensionToggle = document.getElementById("dimensionToggle");
+  const infoButton = document.getElementById("infoButton");
+  const contactToggle = document.getElementById("contactToggle");
+  const contactReveal = document.getElementById("contactReveal");
+
+  const FIXED_PITCH = 38;
+  const FIXED_BEARING = -22;
+  let currentView = "schweiz";
+  let mapReady = false;
+  let mapFailed = false;
+  let is3D = true;
+  let selectedPlace = null;
+  let detailParentView = null;
+  let currentMarkers = [];
+  let searchMarker = null;
+
+  function toLngLat(coords) { return [coords[1], coords[0]]; }
+
+  let map = null;
+  try {
+    map = new maplibregl.Map({
+      container: "map",
+      style: "https://tiles.openfreemap.org/styles/liberty",
+      center: toLngLat(data.schweiz.center),
+      zoom: data.schweiz.zoom,
+      minZoom: data.schweiz.zoom,
+      maxZoom: 19,
+      scrollZoom: false,
+      doubleClickZoom: false,
+      pitch: FIXED_PITCH,
+      bearing: FIXED_BEARING,
+      minPitch: 0,
+      maxPitch: FIXED_PITCH,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      antialias: true
+    });
+    map.touchZoomRotate.disableRotation();
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false, showZoom: false }), "bottom-right");
+  } catch (error) {
+    mapFailed = true;
+    mapStatus.textContent = "Die 3D-Karte benötigt einen Browser mit aktivierter WebGL-Unterstützung.";
+  }
+
+  function setPaint(layerId, property, value) {
+    if (!map.getLayer(layerId)) return;
+    try { map.setPaintProperty(layerId, property, value); } catch (error) {}
+  }
+
+  function applyCartoonStyle() {
+    setPaint("background", "background-color", "#d9edc0");
+    setPaint("park", "fill-color", "#79c66f");
+    setPaint("park", "fill-opacity", .82);
+    setPaint("landcover_wood", "fill-color", "#83ca72");
+    setPaint("landcover_wood", "fill-opacity", .68);
+    setPaint("landcover_grass", "fill-color", "#b8dc87");
+    setPaint("landcover_grass", "fill-opacity", .72);
+    setPaint("landuse_residential", "fill-color", "#f0e5cb");
+    setPaint("water", "fill-color", "#85d2ed");
+    setPaint("waterway_river", "line-color", "#75c7e8");
+    setPaint("waterway_other", "line-color", "#75c7e8");
+    setPaint("building", "fill-color", "#f6e8d2");
+    setPaint("building", "fill-outline-color", "#bf9c7c");
+    if (map.getLayer("building-3d")) {
+      map.setLayerZoomRange("building-3d", 13, 24);
+      setPaint("building-3d", "fill-extrusion-color", [
+        "interpolate", ["linear"], ["coalesce", ["get", "render_height"], 5],
+        0, "#fff4df", 12, "#f4dec0", 30, "#e8c9a8", 80, "#d6b08f"
+      ]);
+      setPaint("building-3d", "fill-extrusion-opacity", .98);
+      setPaint("building-3d", "fill-extrusion-vertical-gradient", true);
+      setPaint("building-3d", "fill-extrusion-ambient-occlusion-intensity", .35);
+      setPaint("building-3d", "fill-extrusion-ambient-occlusion-radius", 4);
+    }
+    if (!map.getLayer("cartoon-roofs")) {
+      const firstLabel = map.getStyle().layers.find(function(layer) { return layer.type === "symbol"; });
+      map.addLayer({
+        id: "cartoon-roofs",
+        type: "fill-extrusion",
+        source: "openmaptiles",
+        "source-layer": "building",
+        minzoom: 13,
+        paint: {
+          "fill-extrusion-base": ["coalesce", ["get", "render_height"], 5],
+          "fill-extrusion-height": ["+", ["coalesce", ["get", "render_height"], 5], 1.1],
+          "fill-extrusion-color": [
+            "step", ["coalesce", ["get", "render_height"], 5],
+            "#c96d52", 10, "#d8845d", 18, "#b9654d", 30, "#96513f"
+          ],
+          "fill-extrusion-opacity": .96,
+          "fill-extrusion-vertical-gradient": true
+        }
+      }, firstLabel ? firstLabel.id : undefined);
+    }
+  }
+
+  function keepOnlyEssentialLabels() {
+    const allowedSourceLayers = new Set(["transportation_name", "housenumber", "place"]);
+    map.getStyle().layers.forEach(function(layer) {
+      if (layer.type !== "symbol") return;
+      if (!allowedSourceLayers.has(layer["source-layer"])) {
+        try { map.setLayoutProperty(layer.id, "visibility", "none"); } catch (error) {}
+      }
+    });
+  }
+
+  function treeCount(percent) { return percent === 0 ? 0 : Math.max(1, Math.ceil(percent / 20)); }
+
+  function treeMarkup(percent) {
+    const active = treeCount(percent);
+    return Array.from({ length: 5 }, function(_, index) {
+      return '<svg class="tree-icon' + (index < active ? '' : ' off') + '" viewBox="0 0 18 21" aria-hidden="true">' +
+        '<path d="M9 1 4.7 6.2h2.1L3 11.2h2.7L2.3 16h13.4l-3.4-4.8H15l-3.8-5h2.1L9 1Z" fill="currentColor"/>' +
+        '<path d="M7.6 15.5h2.8V21H7.6z" fill="#72503a"/></svg>';
+    }).join("");
+  }
+
+  function markerElement(place) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "participation-badge";
+    button.setAttribute("aria-label", place.name + ": " + treeCount(place.percent) + " von 5 Bäumen aktiv");
+    button.innerHTML = '<span class="badge-name">' + place.name + '</span><span class="tree-row">' + treeMarkup(place.percent) + '<span class="tree-count">' + treeCount(place.percent) + '/5</span></span>';
+    return button;
+  }
+
+  function childViewFor(place) {
+    return Object.keys(data).find(function(viewName) {
+      return data[viewName].parent === currentView && data[viewName].title === place.name;
+    }) || null;
+  }
+
+  function updateBackButton(view) {
+    if (!view.parent) {
+      mapBack.hidden = true;
+      return;
+    }
+    const parent = data[view.parent];
+    mapBack.hidden = false;
+    mapBack.textContent = parent.title === "Schweiz" ? "← Zurück zur Schweiz" : "← Zurück zu " + parent.title;
+  }
+
+  function setDimension(nextIs3D) {
+    is3D = nextIs3D;
+    dimensionToggle.textContent = is3D ? "2D" : "3D";
+    dimensionToggle.setAttribute("aria-pressed", String(is3D));
+    dimensionToggle.setAttribute("aria-label", is3D ? "Zur zweidimensionalen Kartenansicht wechseln" : "Zur dreidimensionalen Kartenansicht wechseln");
+    if (mapReady) {
+      map.easeTo({ pitch: is3D ? FIXED_PITCH : 0, bearing: is3D ? FIXED_BEARING : 0, duration: 600 });
+    }
+  }
+
+  function showPlace(place, view) {
+    selectedPlace = place;
+    summaryTitle.textContent = place.name;
+    summaryPercent.textContent = place.percent;
+    summaryText.textContent = "Anteil teilnehmender Haushalte in diesem Beispiel.";
+    summaryLabel.textContent = view.label;
+    milestoneText.textContent = place.percent >= 25 ? "Meilenstein von 25 % erreicht" : "Nächster Meilenstein: 25 %";
+    progressBar.style.width = place.percent + "%";
+    summaryValue.hidden = false;
+    progress.hidden = false;
+    infoButton.hidden = false;
+    infoButton.textContent = "Mehr über " + place.name + " erfahren";
+  }
+
+  function renderMarkers(view) {
+    currentMarkers.forEach(function(marker) { marker.remove(); });
+    currentMarkers = [];
+    view.places.forEach(function(place) {
+      const element = markerElement(place);
+      const marker = new maplibregl.Marker({ element: element, anchor: "bottom" })
+        .setLngLat(toLngLat(place.coords)).addTo(map);
+      element.addEventListener("click", function() { showPlace(place, view); });
+      place.marker = marker;
+      currentMarkers.push(marker);
+    });
+  }
+
+  function showView(viewName, animate) {
+    const view = data[viewName];
+    if (!view) return;
+    currentView = viewName;
+    selectedPlace = null;
+    detailParentView = null;
+    infoButton.hidden = true;
+    updateBackButton(view);
+    if (mapReady) {
+      map.setMinZoom(data.schweiz.zoom);
+      renderMarkers(view);
+      map.easeTo({
+        center: toLngLat(view.center),
+        zoom: view.zoom,
+        pitch: is3D ? FIXED_PITCH : 0,
+        bearing: is3D ? FIXED_BEARING : 0,
+        duration: animate === false ? 0 : 850
+      });
+      
+      const currentLevel = getViewLevel(viewName);
+
+      // Bäume NUR auf Ebene 3 (Quartier) und Ebene 4 (Strassen) rendern
+      if (currentLevel >= 3) {
+        setTimeout(() => {
+          spawnTreesForView(viewName);
+        }, 300);
+      } else {
+        if (map.getLayer('custom-3d-trees-layer')) {
+          map.removeLayer('custom-3d-trees-layer');
+        }
+      }
+    }
+
+    summaryTitle.textContent = view.title;
+    summaryPercent.textContent = view.percent;
+    summaryText.textContent = view.text;
+    summaryLabel.textContent = view.label;
+    milestoneText.textContent = view.milestone;
+    progressBar.style.width = view.percent + "%";
+    summaryValue.hidden = false;
+    progress.hidden = false;
+    searchResults.hidden = true;
+  }
+
+  function findLocalPlace(query) {
+    const normalized = query.trim().toLocaleLowerCase("de-CH");
+    for (const viewName of Object.keys(data)) {
+      const place = data[viewName].places.find(function(item) {
+        return item.name.toLocaleLowerCase("de-CH") === normalized;
+      });
+      if (place) return { viewName: viewName, place: place };
+    }
+    return null;
+  }
+
+  function chooseSearchResult(result) {
+    const coords = [Number(result.lon), Number(result.lat)];
+    if (mapReady) {
+      if (searchMarker) searchMarker.remove();
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = "search-marker";
+      element.textContent = "Fundort";
+      element.setAttribute("aria-label", "Gefundene Adresse auf der Karte");
+      searchMarker = new maplibregl.Marker({ element: element, anchor: "bottom" })
+        .setLngLat(coords)
+        .addTo(map);
+      map.easeTo({
+        center: coords,
+        pitch: is3D ? FIXED_PITCH : 0,
+        bearing: is3D ? FIXED_BEARING : 0,
+        duration: 900
+      });
+    }
+    summaryLabel.textContent = "Suchergebnis · OpenStreetMap";
+    summaryTitle.textContent = result.display_name.split(",")[0];
+    summaryText.textContent = result.display_name;
+    summaryValue.hidden = true;
+    progress.hidden = true;
+    infoButton.hidden = true;
+    milestoneText.textContent = "Adresse auf der Karte gefunden";
+    searchResults.hidden = true;
+  }
+
+  function renderSearchResults(results) {
+    searchResults.innerHTML = "";
+    if (!results.length) {
+      searchResults.innerHTML = '<p class="search-message">Kein passender Ort gefunden.</p>';
+    } else {
+      results.forEach(function(result) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "search-result";
+        button.textContent = result.display_name;
+        button.addEventListener("click", function() { chooseSearchResult(result); });
+        searchResults.appendChild(button);
+      });
+    }
+    searchResults.hidden = false;
+  }
+
+  mapBack.addEventListener("click", function() {
+    if (detailParentView) {
+      showView(detailParentView);
+      return;
+    }
+    const parent = data[currentView] && data[currentView].parent;
+    if (parent) showView(parent);
+  });
+
+  dimensionToggle.addEventListener("click", function() { setDimension(!is3D); });
+
+  infoButton.addEventListener("click", function() {
+    if (!selectedPlace) return;
+    const childView = childViewFor(selectedPlace);
+    if (childView) {
+      showView(childView);
+      return;
+    }
+    if (mapReady) {
+      map.easeTo({
+        center: toLngLat(selectedPlace.coords),
+	zoom: 18,
+        pitch: is3D ? FIXED_PITCH : 0,
+        bearing: is3D ? FIXED_BEARING : 0,
+        duration: 750
+      });
+    }
+    detailParentView = currentView;
+    mapBack.hidden = false;
+    mapBack.textContent = data[currentView].title === "Schweiz" ? "← Zurück zur Schweiz" : "← Zurück zu " + data[currentView].title;
+    summaryLabel.textContent = "Standort · Beispieldaten";
+    summaryText.textContent = "Detailansicht für " + selectedPlace.name + ". Die Beteiligung wird durch " + treeCount(selectedPlace.percent) + " von 5 Bäumen dargestellt.";
+    infoButton.hidden = true;
+  });
+
+  searchForm.addEventListener("submit", async function(event) {
+    event.preventDefault();
+    const query = searchInput.value.trim();
+    if (!query) return;
+    const normalizedQuery = query.toLocaleLowerCase("de-CH");
+    const matchingView = Object.keys(data).find(function(viewName) {
+      return data[viewName].title.toLocaleLowerCase("de-CH") === normalizedQuery;
+    });
+    if (matchingView) {
+      showView(matchingView);
+      return;
+    }
+    const local = findLocalPlace(query);
+    if (local) {
+      showView(local.viewName);
+      if (mapReady) {
+        map.easeTo({
+          center: toLngLat(local.place.coords),
+          pitch: is3D ? FIXED_PITCH : 0,
+          bearing: is3D ? FIXED_BEARING : 0,
+          duration: 800
+        });
+      }
+      showPlace(local.place, data[local.viewName]);
+      return;
+    }
+    searchResults.innerHTML = '<p class="search-message">Suche läuft …</p>';
+    searchResults.hidden = false;
+    try {
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "5", countrycodes: "ch", addressdetails: "1" });
+      const response = await fetch(url, { headers: { "Accept-Language": "de" } });
+      if (!response.ok) throw new Error("Suche nicht erreichbar");
+      renderSearchResults(await response.json());
+    } catch (error) {
+      searchResults.innerHTML = '<p class="search-message">Die Onlinesuche ist gerade nicht erreichbar. Beispielorte wie Winterthur funktionieren weiterhin.</p>';
+    }
+  });
+
+  document.addEventListener("click", function(event) {
+    if (!event.target.closest(".search-wrap")) searchResults.hidden = true;
+  });
+
+  contactToggle.addEventListener("click", function() {
+    const willOpen = contactReveal.hidden;
+    contactReveal.hidden = !willOpen;
+    contactToggle.setAttribute("aria-expanded", String(willOpen));
+    contactToggle.textContent = willOpen ? "Kontaktmöglichkeiten ausblenden" : "Kontaktmöglichkeiten anzeigen";
+  });
+
+  if (map) {
+    map.on("load", function() {
+      mapReady = true;
+      applyCartoonStyle();
+      keepOnlyEssentialLabels();
+      mapStatus.hidden = true;
+      showView(currentView, false);
+    });
+  }
+
+  window.setTimeout(function() {
+    if (!mapReady && !mapFailed) mapStatus.textContent = "Die 3D-Karte konnte nicht geladen werden. Bitte Internetverbindung prüfen.";
+  }, 10000);
+
+  showView("schweiz", false);
+
+// Globaler Speicher für bereits geladene 3D-Modelle (Cache)
+const modelCache = {};
+
+function add3DTreeLayer(
+  mapInstance, 
+  treeLocations, 
+  treePaths = [
+    'vendor/3d_trees/Tree_big_double.glb',
+    'vendor/3d_trees/Tree_double.glb',
+    'vendor/3d_trees/Tree_triple.glb',
+    'vendor/3d_trees/Tree_birk.glb'
+  ], 
+  scale = 12
+) {
+  const layerId = 'custom-3d-trees-layer';
+
+  if (mapInstance.getLayer(layerId)) {
+    mapInstance.removeLayer(layerId);
+  }
+
+  const customLayer = {
+    id: layerId,
+    type: 'custom',
+    renderingMode: '3d',
+    onAdd: async function (map, gl) {
+      this.camera = new THREE.Camera();
+      this.scene = new THREE.Scene();
+      this.map = map;
+
+      this.scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      dirLight.position.set(50, 100, 50);
+      this.scene.add(dirLight);
+
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(),
+        context: gl,
+        antialiasing: true
+      });
+      this.renderer.autoClear = false;
+
+      const loader = new THREE.GLTFLoader();
+
+      // Hilfsfunktion zum einmaligen Laden & Cachen
+      const loadModel = (path) => {
+        if (modelCache[path]) return Promise.resolve(modelCache[path]);
+        return new Promise((resolve, reject) => {
+          loader.load(path, (gltf) => {
+            modelCache[path] = gltf.scene;
+            resolve(gltf.scene);
+          }, undefined, reject);
+        });
+      };
+
+      try {
+        // 1. Alle 4 Modelle parallel NUR 1-mal herunterladen
+        await Promise.all(treePaths.map(path => loadModel(path)));
+
+        // 2. Bäume aus dem Arbeitsspeicher (Cache) klonen und platzieren
+        treeLocations.forEach((loc) => {
+          const randomPath = treePaths[Math.floor(Math.random() * treePaths.length)];
+          const model = modelCache[randomPath].clone();
+
+          const lng = Array.isArray(loc) ? loc[1] : loc.lng;
+          const lat = Array.isArray(loc) ? loc[0] : loc.lat;
+
+          const coord = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+          const modelScale = coord.meterInMercatorCoordinateUnits() * scale;
+
+          model.position.set(coord.x, coord.y, coord.z);
+          model.scale.set(modelScale, modelScale, modelScale);
+          model.rotation.x = Math.PI / 2;
+          model.rotation.y = Math.random() * Math.PI * 2;
+
+          this.scene.add(model);
+        });
+
+        this.map.triggerRepaint();
+      } catch (err) {
+        console.error("Fehler beim Laden der 3D-Bäume:", err);
+      }
+    },
+
+    render: function (gl, matrix) {
+      if (!this.renderer) return;
+      this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
+      this.renderer.resetState();
+      this.renderer.render(this.scene, this.camera);
+      this.map.triggerRepaint();
+    }
+  };
+
+  mapInstance.addLayer(customLayer);
+}
+
+   /**
+   * Prüft, ob eine Koordinate auf einer geeigneten Fläche liegt
+   * (Verhindert Platzierung auf Gebäuden, Straßen, Parkplätzen)
+   */
+  function isValidTreeLocation(lng, lat) {
+    if (!mapReady || !map) return true;
+
+    // Umrechnen der Koordinaten in Bildschirm-Pixel für die Feature-Abfrage
+    const point = map.project([lng, lat]);
+    const features = map.queryRenderedFeatures(point);
+
+    if (!features || features.length === 0) return true;
+
+    // Blockierte Flächen (Layer-Namen / Source-Layer aus OpenMapTiles)
+    const blockedKeywords = ['building', 'road', 'transportation', 'parking', 'pavement'];
+    
+    // Erlaubte Grünflächen
+    const greenKeywords = ['park', 'grass', 'wood', 'landcover', 'landuse_residential', 'garden'];
+
+    let isOnBlockedArea = false;
+    let isOnGreenArea = false;
+
+    for (const f of features) {
+      const layerId = (f.layer && f.layer.id) ? f.layer.id.toLowerCase() : '';
+      const sourceLayer = (f.layer && f.layer['source-layer']) ? f.layer['source-layer'].toLowerCase() : '';
+
+      // Falls es sich um ein Gebäude, Straße oder Parkplatz handelt -> Verbieten
+      if (blockedKeywords.some(k => layerId.includes(k) || sourceLayer.includes(k))) {
+        isOnBlockedArea = true;
+        break;
+      }
+
+      // Prüfen, ob es eine grüne Fläche ist
+      if (greenKeywords.some(k => layerId.includes(k) || sourceLayer.includes(k))) {
+        isOnGreenArea = true;
+      }
+    }
+
+    // Wenn es ein Gebäude/Straße ist -> Ablehnen. Bevorzugt Grünflächen.
+    if (isOnBlockedArea) return false;
+    return isOnGreenArea || true; 
+  }
+
+  /**
+   * Generiert Baum-Koordinaten basierend auf der Prozentzahl der Orte
+   * und ruft add3DTreeLayer() auf.
+   */
+  function spawnTreesForView(viewName) {
+    const view = data[viewName];
+    if (!view || !view.places) return;
+
+    const generatedTreeCoords = [];
+
+    view.places.forEach(place => {
+      const count = treeCount(place.percent); // Nutzt Ihre Logik: 0 bis 5 Bäume
+      if (count === 0) return;
+
+      const baseLat = place.coords[0];
+      const baseLng = place.coords[1];
+
+      // Je nach Zoomstufe den Radius anpassen (Quartier vs. Einzelne Strasse)
+      const radius = viewName === 'sonnenwinkel' ? 0.0003 : 0.0001;
+
+      for (let i = 0; i < count; i++) {
+        let validCoordsFound = false;
+        let attempts = 0;
+        let finalLat = baseLat;
+        let finalLng = baseLng;
+
+        // Bis zu 15 Versuche, eine sinnvolle grüne Stelle nahe dem Marker zu finden
+        while (!validCoordsFound && attempts < 15) {
+          const randomAngle = Math.random() * Math.PI * 2;
+          const randomDist = (Math.random() * 0.7 + 0.3) * radius;
+
+          const testLat = baseLat + Math.sin(randomAngle) * randomDist;
+          const testLng = baseLng + Math.cos(randomAngle) * randomDist;
+
+          if (isValidTreeLocation(testLng, testLat)) {
+            finalLat = testLat;
+            finalLng = testLng;
+            validCoordsFound = true;
+          }
+          attempts++;
+        }
+
+        generatedTreeCoords.push([finalLat, finalLng]);
+      }
+    });
+
+    // Skalierung je nach Ansicht anpassen
+    const treeScale = viewName === 'sonnenwinkel' ? 10 : 14;
+
+    // Aufruf der definierten 3D-Baum-Funktion
+    if (generatedTreeCoords.length > 0) {
+      add3DTreeLayer(map, generatedTreeCoords, undefined, treeScale);
+    } else if (map.getLayer('custom-3d-trees-layer')) {
+      map.removeLayer('custom-3d-trees-layer');
+    }
+  }
+
+</script>
+
+</body>
+</html>
